@@ -1,0 +1,12 @@
+[user]
+	name = ThermalSpan 
+	email = russell.w.bentley@icloud.com
+[merge]
+	tool = vimdiff
+	conflictstyle = diff3
+[mergetool]
+	prompt = false
+[rebase]
+	autoStash = true
+[pull]
+	rebase = true

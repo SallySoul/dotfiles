@@ -1,0 +1,188 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Params::Validate qw(:all);
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+Recursivley get the dependencies for a project (in a given train),
+using a breadth first search. The resulting files are then put in 
+a specified output file.
+
+Mandatory Flags:
+    -project <project>          The projects that seed the frontier. Can be passed multiple times
+    -output <file>              File to place the output into
+  
+Search Type
+    -dependencies
+        OR
+    -dependents
+
+Options:
+    -maxdepth <depth>            The maximum number of iterations to do
+    -train                      Defaults to \$TRAIN
+    -graph <file>               Dump the information found into a dot file 
+    -debug                      Print out extra information
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    my @projects;
+    
+    usage()
+        unless GetOptions(
+            \%args, 'train=s', 'project=s', 
+            'output=s', 'help', 'graph=s',
+            'maxdepth=s',
+            'dependencies', 'dependents',
+            'debug',
+            'project=s' => \@projects
+        );
+
+    # Validate input
+    usage if $args{help};
+    usage("You must pass at least one -project <project>") if scalar @projects == 0;
+    usage("You must pass a -output <outputfile>") if ! $args{output};
+    usage("You must pass -dependencies or -dependents") if ! ($args{dependencies} || $args{dependents});
+    usage("You cannot have both -dependencies and -dependents") if $args{dependencies} && $args{dependents};
+    
+    $args{'train'} = $ENV{'TRAIN'} if ! $args{train};
+    
+    $args{projects} = \@projects;
+    return %args;    
+}
+
+sub main {
+    my %args = parseArgs();
+
+    my $link_regex;
+    if ($args{dependencies}) {
+        $link_regex = qr/links:/;
+    }
+    elsif ($args{dependents}) {
+        $link_regex = qr/linked by:/;
+    }
+    
+    # Lets setup the breadth first search
+    # projects hash to keep track of what we've already seen
+    my %projects;
+    # frontier is the array of projects to explore
+    my @frontier;
+    push @frontier, @{$args{projects}};
+    # And we use this to print out info, and rank nodes in the graph
+    my $iteration = 0;
+    
+    # If the user wants the dot file, we are going to print it as we go
+    # ^ to avoid building a more complicated structure
+    my $graph_handle;
+    my %graph_rankings;
+    if ( $args{graph} && ( ! open $graph_handle, '>', $args{graph} ) ) {
+        print "ERROR: unable to open handle to $args{graph}\n$!\n";
+        return;
+    }
+    print $graph_handle "digraph links {\n" if $args{graph};
+
+    my $s = scalar @frontier;
+    print "Staring with $s projects in frontier\n";
+    
+    # Breadth first seach
+    while (scalar @frontier > 0) {
+        print "Starting iteration $iteration\n";
+        my @new_frontier;
+        my $projects_explored = 0;
+        $graph_rankings{$iteration} = [];
+
+        foreach my $proj (@frontier) {
+            # Only explore projects not in the hash
+            if ( ! $projects{$proj} ) {
+                push @{$graph_rankings{$iteration}}, $proj;
+
+                print "\tExploring $proj\n";
+
+                $projects{$proj} = 1;
+                $projects_explored += 1;
+                
+                # The edges of this graph are "queried" by running xbsfind
+                my $command = "xbs xbsfind";
+                $command .= " dependencies" if $args{dependencies};
+                $command .= " dependents" if $args{dependents};
+                $command .= " --minimal -nokexts -nocortex --notools --noaliases";
+                $command .= " --update Current$args{train} $proj";
+
+                print "\t\t[DEBUG] running command: $command\n" if $args{debug};
+
+                my $pipe_handle;
+                if ( ! open $pipe_handle, "-|", $command) {
+                    print "ERROR: Unable to open pipe to $command\n$!\n";
+                }
+                
+                # Parsing the output is a simple state machine.
+                # as long as they're not blank lines or *** nothing ***, we add them to the list 
+                my $state = 0;
+                while (my $line = <$pipe_handle>) {
+                    if ($line =~ $link_regex) {
+                        $state = 1;
+                    }
+                    elsif ($state == 1) {
+                        $line =~ /\t(.*)$/;
+                        if ($1 
+                            && $line !~ /\*\*\* nothing \*\*\*/
+                            && $line !~ /Security_executables/
+                            && $line !~ /libxpc/) {
+                            
+                            push @new_frontier, $1;
+
+                            # For graph printing, just print the edge from the current project
+                            # to all every connected project
+                            print $graph_handle "\t$proj -> $1\n" if $args{graph};
+                        }
+                    }
+                }
+                # End of per-line-command-output while loop
+            }    
+            # End of per-project-in-frontier for loop
+        } 
+
+        @frontier = @new_frontier;
+        $iteration += 1;
+        print "\tExplored $projects_explored new projects\n\n";
+
+        if ($args{maxdepth} && $iteration >= $args{maxdepth}) {
+            print "\tHit maximum depth, exiting\n";
+            last;
+        }
+    }
+    # End of BFS while loop
+
+    # For the graph, printing out the ranking of nodes helps organize things a bit
+    if ($args{graph}) {
+        foreach my $iter (sort (keys %graph_rankings)) {
+            print $graph_handle "\t{rank=same ";
+            map { print $graph_handle "$_ "; } @{$graph_rankings{$iter}};
+            print $graph_handle "}\n";
+        }
+
+        # This closes the graph structure
+        print $graph_handle "}\n";
+    }
+    
+    # lastly, lets print out all the projects we found into a deps file!
+    my $output_handle;
+    if ( ! open $output_handle, ">", $args{'output'}) {
+        print "ERROR: could not open $args{'output'}\n$!\n";
+    }
+    foreach my $proj (sort (keys %projects)) {
+        print $output_handle "$proj\n";
+    }
+}
+
+main();

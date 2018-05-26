@@ -1,0 +1,65 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+our $BNI;
+BEGIN {
+#    $BNI = ( getpwnam('bni') )[7];
+#    do "$BNI/plib/InitBNI.pm" or die $@;
+    push @INC, '/tmp/1502390384-bnitools/plib'
+}
+
+use BNI::Repos;
+use Getopt::Long;
+use Params::Validate qw(:all);
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+This tool spits out a list of the configuration projects for a given train
+
+Mandatory Flags:
+
+Options:
+    -train <train>              The train to lookup, defaults to \$TRAIN
+    -help                       Brings up the usage menu
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    
+    usage()
+        unless GetOptions(
+            \%args, 'train=s', 'help'
+        );
+
+    $args{train} = $ENV{TRAIN} if ! $args{train};
+
+    # Validate input
+    usage if $args{help};
+    usage("You must pass -train <train> or have \$TRAIN defined") if ! $args{train};
+
+
+    return %args;    
+}
+
+sub main {
+    my %args = parseArgs();
+
+    my @projects = BNI::Repos::getProjects( train => $args{train} );
+
+    foreach my $project (@projects) {
+        my $location;
+        my $type;
+        ($location, $type) = BNI::Repos::getLocation(train => $args{train}, project => $project);
+        print "$project, loc: $location, type: $type\n";
+    }
+}
+
+main();

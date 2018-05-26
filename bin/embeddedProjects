@@ -1,0 +1,340 @@
+#!/usr/bin/env perl
+
+BEGIN {
+    our $BNI = ( getpwnam('bni') )[7];
+    do "$BNI/plib/InitBNI.pm" or die $@;
+}
+
+use strict;
+use warnings;
+use BNI::Repos;
+use Getopt::Long; use ReleaseData;
+use Cortex;
+
+sub usage {
+    my $program = "embeddedProjects";
+
+    die <<"EOF"
+PURPOSE:
+
+USAGE:
+    $program [OPTIONS]
+    
+OPTIONAL PARAMETERS:
+    -h / --help     Display the usage message
+    -train <T>      The train to configure, defaults to \$TRAIN
+    -srcTrain <T>   The train to compare too, defualts to synced to.
+    -allEmbedded    Instead of the defualt list, grab all projects with embedded projects in the source train.
+    -printTable     Print a table with embededed projects from srcTrain and suggestions for train
+    -cortexCommands Print cortex commands for acting on suggested embedded Projects.
+    -useBNIRepos    Uses the BNI repos list, can be incomplete
+    -fix            Only sets project that differ from expectation
+EOF
+}
+
+# Internally, we maintain a list of projects to be configured.
+# Each project in the list is a hashmap with some attributes
+# The name, a train prefrix, and a srcTrain prefix is applicable
+#   i.e. _ViewData, Tigris_ViewData, and Erie_ViewData
+# We then build up the lest of embedded projects in the srcTrain
+# Make modifications to our train
+# and then generate the commands
+
+# The regex for matching special project names
+my $projectName_regex = qr/([a-zA-Z]*)(
+    _ViewData|
+    _Mastering_XBSConfig|
+    _TrainConfig|
+    _DevicesConfig|
+    _PatchesConfig|
+    _PartNumbers_Mastering_XBSConfig|
+    _PatchBase_Mastering_XBSConfig|
+    _BuildRoot_XBSConfig
+)/x;
+
+# The default project list to run
+my @projectList = (
+    "_ViewData",
+    "_Mastering_XBSConfig",
+    "_TrainConfig",
+    "_DevicesConfig",
+#    "_PatchesConfig",
+    "_PartNumbers_Mastering_XBSConfig",
+#    "_PatchBase_Mastering_XBSConfig",
+    "_BuildRoot_XBSConfig",
+    "iOS_GarbageCollect_XBSConfig",
+);
+
+# Our cortex session
+my $cortex = Cortex->new();
+
+# We will need a list of projects for both trains
+my (@trainProjects, @srcProjects);
+
+# The internal representation of projects and suggestions lives here.
+my @importedProjects;
+
+# Argument Variables are globals. Yay!
+my ($helpFlag, $tableFlag, $cortexCommandsFlag, $bniReposFlag, $fixFlag, $train, $srcTrain);
+sub parseArgs {
+    GetOptions(
+        'help|?'            => \$helpFlag,
+        'printTable|?'      => \$tableFlag,
+        'cortexCommands|?'  => \$cortexCommandsFlag,
+        'useBNIRepos|?'     => \$bniReposFlag,
+        'fix|?'             => \$fixFlag,
+        'train=s'           => \$train,
+        'srcTrain=s'        => \$srcTrain,
+    ) or usage();
+
+    if ($helpFlag) {
+        usage();
+    }
+}
+
+sub getTrainProjectName {
+    my ($project_ref) = @_;
+    my $result = "";
+    if (exists ${$project_ref}{'train_prefix'}) {
+       $result .= ${$project_ref}{'train_prefix'}; 
+    }
+    $result .= ${$project_ref}{'name'};
+    return $result;
+}
+
+sub getSrcTrainProjectName {
+    my ($project_ref) = @_;
+    my $result = "";
+    if (exists ${$project_ref}{'src_prefix'}) {
+       $result .= ${$project_ref}{'src_prefix'}; 
+    }
+    $result .= ${$project_ref}{'name'};
+    return $result;
+}
+
+# Load the train name from the .syncedTo file in the view
+sub loadSyncedToTrain {
+    my $viewPath = ReleaseData::viewPathForRelease($train);
+    open (SYNCEDTO, '<', "$viewPath/.syncedTo") or die "Could not open $viewPath/.syncedTo: $!\n";
+    chomp(my $syncedToUpdate = <SYNCEDTO>);
+    close (SYNCEDTO);
+    return ReleaseData::releaseForUpdate($syncedToUpdate);
+}
+
+# Some projects have prefixed names, so we need to see what version of the project is open in each train
+sub findMatchingProject {
+    my ($baseName) = @_;
+    
+    my $train_prefix; 
+    foreach my $project (@trainProjects) {
+        if ($project->project() =~ qr/([a-zA-Z]*)$baseName/) {
+            $train_prefix = $1;
+            last;
+        }
+    }
+    if (!$train_prefix) {
+        die "Could not find a project matching $baseName in $train ...\n";
+    }
+    
+    my $src_prefix;
+    foreach my $project (@srcProjects) {
+        if ($project->project() =~ qr/([a-zA-Z]*)$baseName/) {
+            $src_prefix = $1;
+            last;
+        }
+    }
+    if (!$src_prefix) {
+        die "Could not find a project matching $baseName in $srcTrain ...\n";
+    }
+    
+    return ($train_prefix, $src_prefix);
+}
+
+# Confirms that a given project (without weird prefix name) exists in both $train and $srcTrain
+sub confirmProjectExistence {
+    my ($name) = @_;
+    
+    # Check in $train, or DIE 
+    my $trainFlag = 0;
+    foreach my $project (@trainProjects) {
+        if ($project->project() =~ qr/$name/) {
+            $trainFlag = 1;
+            last;
+        }
+    }
+    if (!$trainFlag) {
+        die "Could not find $name in $train ...\n";
+    }
+    
+    # Check in $srcTrain, or DIE
+    my $srcFlag = 0;
+    foreach my $project (@srcProjects) {
+        if ($project->project() =~ qr/$name/) {
+            $srcFlag = 1;
+            last;
+        }
+    }
+    if (!$srcFlag) {
+        die "Could not find $name in $srcTrain ...\n";
+    }
+}
+
+# Take a project name, and translate it to our internal reresentation
+sub importProject {
+    my ($name, $result_ref) = @_;
+    #my %result = %{$result_ref};
+
+    if ($name =~ $projectName_regex) {
+        my ($pre, $baseName) = ($1, $2);
+        
+        # Check to see which version of this project is open in train and srcTrain
+        my ($train_prefix, $src_prefix) = findMatchingProject($baseName);
+        # Save That information
+        ${$result_ref}{'name'} = $baseName;
+        ${$result_ref}{'train_prefix'} = $train_prefix;
+        ${$result_ref}{'src_prefix'} = $src_prefix;
+    } 
+    else {
+        ${$result_ref}{'name'} = $name;
+        confirmProjectExistence($name);
+    }
+    
+    my @train_embedded;
+    my @src_embedded; 
+    ${$result_ref}{'train_embedded'} = \@train_embedded;
+    ${$result_ref}{'src_embedded'} = \@src_embedded;
+}
+
+# This method gets the embedded projects for project in the src train, and then makes that list for the train
+sub getEmbeddedProjects {
+    my ($project_ref) = @_;
+
+    my $projectName = getSrcTrainProjectName($project_ref);
+
+    my @cortexResults = $cortex->listProjectAttributes(
+        train => $srcTrain,
+        project => $projectName,
+        returnFields => [ 'embeddedProjects' ],
+    );
+
+    foreach my $embProject (@{$cortexResults[0]->embeddedProjects()}) {
+        my %embProject;
+        importProject($embProject, \%embProject);
+        if (exists $embProject{'src_prefix'}) {
+            push @{${$project_ref}{'src_embedded'}}, ($embProject{'src_prefix'}.$embProject{'name'}); 
+            push @{${$project_ref}{'train_embedded'}}, ($embProject{'train_prefix'}.$embProject{'name'});
+        } else {
+            push @{${$project_ref}{'train_embedded'}}, $embProject{'name'}; 
+            push @{${$project_ref}{'src_embedded'}}, $embProject{'name'}; 
+        }
+    } 
+}
+
+sub printTable {
+    foreach my $project_ref (@importedProjects) {
+        my $srcName = getSrcTrainProjectName($project_ref);
+        my $traName = getTrainProjectName($project_ref);
+        
+        print "$srcName in $srcTrain embeds:\n";
+        foreach my $embProject (@{${$project_ref}{'src_embedded'}}) {
+            print "\t$embProject\n";
+        }
+        print "$traName in $train could embed:\n";
+        foreach my $embProject (@{${$project_ref}{'train_embedded'}}) {
+            print "\t$embProject\n";
+        }
+        print "\n\n";
+    }
+}
+
+sub printCortexCommands {
+    foreach my $project_ref (@importedProjects) {
+        if (scalar @{${$project_ref}{'train_embedded'}} == 0) {
+            next;
+        }
+        my $name = getTrainProjectName($project_ref);
+        print "xbs cortex setProjectRule train=$train project=$name embeddedProjects=[";
+        foreach my $embProject (@{${$project_ref}{'train_embedded'}}) {
+            print "$embProject,";
+        }
+        print "\b]\n";
+    }
+}
+
+sub fix {
+    # For each project, does the suggestion list match the actual embedded list?
+    foreach my $project_ref (@importedProjects) {
+        my $projectName = getTrainProjectName($project_ref);
+
+        my @cortexResults = $cortex->listProjectAttributes(
+            train => $train,
+            project => $projectName,
+            returnFields => [ 'embeddedProjects' ],
+        );
+        
+        my @actualEmbedded;
+        foreach my $embProject (@{$cortexResults[0]->embeddedProjects()}) {
+            my %embProject;
+            importProject($embProject, \%embProject);
+        #push (@actualEmbedded, getTrainProjectName(\%embProject);
+        }
+        my @suggestedEmbedded;
+        
+
+    }
+}
+
+sub main {
+    parseArgs();
+    print "Starting ...\n";
+
+    # default train to configure is $TRAIN
+    if(!$train) {
+        $train = $ENV{'TRAIN'};
+    }
+    # defualt train to compare to is the syncedTo
+    if(!$srcTrain) {
+        $srcTrain = loadSyncedToTrain();
+    }
+
+    print "Getting project lists from cortex ...\n";
+    @trainProjects = $cortex->listProjectAttributes(
+            train => $train,
+            returnFields => [ 'project' ],
+        );
+    @srcProjects = $cortex->listProjectAttributes(
+            train => $srcTrain,
+            returnFields => [ 'project' ],
+        );
+     
+    if ($bniReposFlag) {
+        @projectList = BNI::Repos::getProjects( train => $srcTrain );
+    } 
+
+    # For now we'll go with the default list, though we can add options in the future 
+    foreach my $project (@projectList) {
+        my %result;
+        importProject($project, \%result);
+        push @importedProjects, (\%result);
+    }
+
+    # Now we need to get the embedded projects from the source train and copy it here
+    foreach my $project_ref (@importedProjects) {
+       getEmbeddedProjects($project_ref); 
+    }
+
+    # Now, what do we do with said info?
+    if ($tableFlag) {
+        printTable();
+    }
+
+    if ($cortexCommandsFlag) {
+        printCortexCommands();
+    }
+    
+    if ($fixFlag) {
+
+    }
+}
+
+main();

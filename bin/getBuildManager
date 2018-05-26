@@ -1,0 +1,32 @@
+#!/usr/bin/perl
+
+# Copied for Sam Menasco's script. 
+# smanasco
+
+use strict;
+use warnings;
+
+use Cortex;
+use Getopt::Long;
+
+my $train = "";
+if(!GetOptions('train=s' => \$train ) || !$train) {
+    die print 
+    "Usage: getBuildManager -train <train>
+        Use getBuildManager to get the address of the build manager for a given train.
+    "; 
+}
+
+
+my $cortex = Cortex->createObjectForTrains(trains => [$train]);
+my @cortexResults = $cortex->listTrainAttributes(
+    train => $train,
+    returnFields => ['buildManager'],
+);
+
+if ( ! $cortexResults[0] ) {
+    print STDERR "Now cortex results for $train?\n";
+} 
+
+my $manager = $cortexResults[0]->buildManager();
+print $manager;

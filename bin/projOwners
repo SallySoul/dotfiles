@@ -1,0 +1,155 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use Cortex;
+use Getopt::Long;
+use Params::Validate qw(:all);
+use Term::ANSIColor;
+
+my $cortex = Cortex->new();
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+A tool for querying the owners and radar components of multiple projects
+
+Mandatory Flags:
+    -project                    Project to analyze, can be passed multiple times, -p also works
+
+Options:
+    -train                      Defaults to \$TRAIN
+    -noprint                    DON't print all the useful, per-project, info 
+    -owners                     print list of owners for all passed projects
+    -help                       Brings up the usage menu
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    my @projects;
+
+    usage()
+        unless GetOptions(
+            \%args, 'help', 'owners', 'noprint',
+            'train=s',
+            'project=s' => \@projects,
+        );
+
+    # Validate input
+    usage if $args{help}; usage if scalar @projects == 0;
+
+    # Populate train
+    $args{'train'} = $ENV{'TRAIN'} if ! $args{'train'};
+    $args{'noprint'} = 0 if ! $args{'noprint'};
+    
+    # Now, put the projects list in the args
+    $args{'projects'} = \@projects;
+
+    return %args;   
+}
+
+sub handleProject {
+    my %options = validate (
+        @_,
+        {   project => { type => SCALAR, optional => 0 },
+            train => { type => SCALAR, optional => 0 },
+            owners => { type => HASHREF, optional => 1 }, 
+            noprint => { type => SCALAR, optional => 1 },
+        }
+    );
+
+    my @cortexResults = $cortex->listProjectAttributes(
+        train => $options{'train'},
+        project => $options{'project'},
+        returnFields => [ 'primaryOwner', 'secondaryOwners', 'radarComponents' ],
+    );
+
+    if ( ! $cortexResults[0] ) {
+        print "WARN: unable to get cortex results of $options{'project'}\n";
+        return
+    }
+    
+    # Make the information accessable...
+    my $primary = $cortexResults[0]->primaryOwner();
+    my @secondary = @{$cortexResults[0]->secondaryOwners()};
+    my @radarComponents = $cortexResults[0]->radarComponents();
+
+    # Populate the owner hash
+    $options{'owners'}->{$primary} = 1 if $primary;
+    foreach my $s (@secondary) {
+        $options{'owners'}->{$s} = 1;
+    }
+
+    # Print the stuff.... blarg 
+    if ( ! $options{'noprint'} ) {
+        print color('bright_magenta');
+        print "Project:\n";
+        print color('reset');
+        print "\t$options{'project'}\n";
+
+        print color('bright_magenta');
+        print "Primary:\n";
+        print color('reset');
+        if ($primary) {
+            print "\t$primary\n";
+        } else {
+            print "\tNo primary owner found\n";
+        }
+
+        print color('bright_magenta');
+        print "Secondary:\n";
+        print color('reset');
+        foreach my $s (@secondary) {
+            print "\t$s\n";
+        }
+        
+        print color('bright_magenta');
+        print "Components:\n";
+        print color('reset');
+        foreach my $r (@radarComponents) {
+            print "\t$r\n";
+        }
+
+        print color('bright_magenta');
+        print "Owners:\n";
+        print color('reset');
+        print "\t$primary," if $primary;
+        foreach my $s (@secondary) {
+            print "$s,";
+        }
+        print "\b\n\n";
+    }
+}
+
+sub main {
+    my %args = parseArgs();
+    
+    my %owners;
+    foreach my $project (@{$args{'projects'}}) {
+        handleProject(
+            project => $project,
+            train => $args{'train'},
+            owners => \%owners,
+            noprint => $args{'noprint'},
+        );
+    }
+
+    if ( $args{'owners'} && scalar @{$args{'projects'}} > 1 ) {
+        print color('bright_magenta');
+        print "All Owners:\n";
+        print color('reset');
+        foreach my $owner (sort (keys %owners)) {
+            print "$owner,";
+        }
+        print "\b\n\n";
+    }
+}
+
+main();
+

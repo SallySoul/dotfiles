@@ -1,0 +1,380 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use File::Spec::Functions;
+use Getopt::Long;
+use Params::Validate qw(:all);
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+A tool to audit the mastering of ./AppleInternal/Diags/Tests/AppleSOC
+Usage: diagsAudit [<options>]
+Mandatory:
+    -tmresult               A testmaster result to simplify
+    -pkgbomdir              A PkgBom directory to audit
+
+Options:
+    -osfinalonly            Only audit *OS_Final boms
+    -verbose                Extra info. Kinda annoying
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    
+    usage()
+        unless GetOptions(
+            \%args, 'tmresult=s', 'pkgbomdir=s', 'osfinalonly', 'verbose', 'help'
+        );
+
+    # Validate input
+    usage if $args{help};
+    usage("You need to pass -pkgbomdir <dir>") if ! $args{'pkgbomdir'};
+    usage("You need to pass -tmresult <diff>") if ! $args{'tmresult'};
+
+    if ( ! $args{osfinalonly} ) {
+        $args{osfinalonly} = 0;
+    }
+
+    if ( ! $args{'verbose'} ) {
+        $args{'verbose'} = 0;
+    }
+
+    if ($args{'verbose'}) {
+        print "Printing all arguments:\n";
+        foreach my $key (sort (keys %args)) {
+            print "\t$key: $args{$key}\n";
+        }
+    }
+    
+    return %args;    
+}
+
+sub auditBoms {
+    my %options = validate (
+        @_,
+        {   pkgBomDir       => { type => SCALAR, optional => 0 },
+            tmresult        => { type => SCALAR, optional => 0 },
+            osFinalOnly     => { type => SCALAR, optional => 0 },
+            verbose         => { type => SCALAR, optional => 0 },
+        }
+    );
+    
+    # We build a hash of of all the boms from the directory and the testmaster diff
+    my %boms;
+    
+    # First we iterate through the pkgbom dir
+    print "Starting to comb through $options{'pkgBomDir'}\n" if $options{'verbose'};
+    my $dirHandle;
+    if ( ! opendir $dirHandle, $options{'pkgBomDir'} ) {
+        print "ERROR: unable to open $options{'pkgBomDir'}\n$!\n";
+        return;
+    }
+    my $bomRegex; 
+    if ($options{'osFinalOnly'}) {
+        $bomRegex = qr/([^\/]*OS_Final\.bom)/;
+    } else {
+        $bomRegex = qr/([^\/]*\.bom)/;
+    }
+    while (my $file = readdir($dirHandle)) {
+        print "Checking $file...\n" if $options{'verbose'};
+        if ($file =~ $bomRegex) {
+            my $bom = $1;
+            $boms{$bom} = 1;
+            print "Found $bom in pkgbomsdir...\n" if $options{'verbose'}; 
+        }
+    }
+
+    # Now we iterate through the testmaster diff
+    print "Starting to comb through $options{'tmresult'}\n" if $options{'verbose'};
+    my $tmhandle;
+    if ( ! open $tmhandle, "<", $options{'tmresult'} ) {
+        print "ERROR: Unable to open $options{'tmresult'}\n$!\n";
+        return
+    }
+    if ($options{'osFinalOnly'}) {
+        $bomRegex = qr/################## ([^\/]*OS_Final\.bom)/;
+    } else {
+        $bomRegex = qr/################## ([^\/]*\.bom)/;
+    }
+    while (my $line = <$tmhandle>) {
+        print "Checking $line" if $options{'verbose'};
+        if ($line =~ $bomRegex ) {
+            my $bom = $1;
+            $boms{$bom} = 1;
+            print "Found $bom in testmaster diff...\n" if $options{'verbose'}; 
+        }
+        elsif ($line =~/\*\*\*\*\* NEW PKGBOMS \(Not in the Update\) \*\*\*\*\*/) {
+            print "Hit last relevant line of tmresult...\n" if $options{'verbose'};
+            last;
+        }
+    }
+
+    # Now we audit each bom
+    print "Starting bom audit...\n" if $options{'verbose'};
+    foreach my $bom (sort (keys %boms)) {
+        auditBom(
+            bom => $bom,
+            pkgbomdir => $options{'pkgBomDir'},
+            tmresult => $options{'tmresult'},
+            verbose => $options{'verbose'},
+        );
+    }
+}
+
+sub auditBom {
+    my %options = validate (
+        @_,
+        {   bom         => { type => SCALAR, optional => 0 },
+            pkgbomdir   => { type => SCALAR, optional => 0 },
+            tmresult    => { type => SCALAR, optional => 0 },
+            verbose     => { type => SCALAR, optional => 0 },
+        }
+    );
+
+    print "Auditing $options{'bom'}\n" if $options{'verbose'};
+    
+    # First, we'll look at the .bom file and see what's there
+    # To do that we use lsbom to list the directories
+    my $bomFilePath = $options{'pkgbomdir'} . '/' . $options{'bom'};
+    my $outputHandle;
+    if ( ! open $outputHandle, '-|', "lsbom -s $bomFilePath" ) {
+        print "ERROR: unable to open pipe to lsbom -s $options{'bom'}\n";
+        return;
+    }
+    
+    # No we iterate through the paths and look for matches 
+    my %testPlatforms;
+    my %GESAF;
+    my %GESA2F;
+    my %FOSDE;
+    while (my $line = <$outputHandle>) {
+        if ($line =~ /^\.\/AppleInternal\/Diags\/Tests\/AppleSOC\/[^\/]*$/) {
+            $testPlatforms{$line} = 1;
+            print "Found the following in the $options{'bom'}, $line" if $options{'verbose'};
+        }
+        
+        # GoldenEncoderStreamsAVEFactory
+        if ($line =~ /^\.\/AppleInternal\/Diags\/Tests\/AppleSOC\/([^\/]*)\/H264$/) {
+            $GESAF{$1} = 1;
+        }
+        
+        # GoldenEncoderStreamsAVEFactory
+        if ($line =~ /^\.\/AppleInternal\/Diags\/Tests\/AppleSOC\/([^\/]*)\/AVE$/) {
+            $GESA2F{$1} = 1;
+
+        }
+
+        # FactoryOSDiagsExtras 
+        if ($line =~ /^\.\/AppleInternal\/Diags\/Tests\/AppleSOC\/([^\/]*)\/HEVC$/ ||
+            $line =~ /^\.\/AppleInternal\/Diags\/Tests\/AppleSOC\/(H6)$/) {
+            $FOSDE{$1} = 1;
+        }
+    }
+    
+    # Now we will cross reference this audit with the testmaster diff 
+    my $tmhandle;
+    if ( ! open $tmhandle, '<', $options{'tmresult'} ) {
+        print "ERROR: unable to open $options{'tmresult'} for reading\n$!\n";
+        return
+    }
+    
+    my %testPlatformsP;
+    my %GESAFP;
+    my %GESA2FP;
+    my %FOSDEP;
+    my %testPlatformsM;
+    my %GESAFM;
+    my %GESA2FM;
+    my %FOSDEM;
+   
+    # State of our testmastering diff parser
+    # 0 - haven;t reached bom section yet
+    # 1 - Reached bom section 
+    my $state = 0;
+    my $bomRegex = qr/################## $options{'bom'}/;
+    while (my $line = <$tmhandle>) {
+        # Are we in our section yet?
+        if ($line =~ $bomRegex) {
+            print "Found $options{'bom'} in testmaster diff...\n" if $options{'verbose'};
+            $state = 1;
+        }
+        ### If we were in our bom's section, and we found a new bom header, then we're done
+        elsif ($line =~ /##################/ && $state == 1) {
+            last;
+        }
+        elsif ($line =~/\*\*\*\*\* NEW PKGBOMS \(Not in the Update\) \*\*\*\*\*/) {
+            if ($state == 0) {
+                print "WARN: did not find $options{'bom'} in testmaster diff\n" if $options{'verbose'};
+            }
+            # No matter the state, we aren't interested in any info past this line.     
+            last;
+        }
+        elsif ($state == 1) {
+            if ($line =~ /^([+-]) \.\/AppleInternal\/Diags\/Tests\/AppleSOC\/[^\/]*$/) {
+                $testPlatformsP{$line} = 1 if $1 eq "+";
+                $testPlatformsM{$line} = 1 if $1 eq "-";
+
+                print "Found the following for $options{'bom'} in testmaster diff, $line" if $options{'verbose'};
+            }
+            
+            # GoldenEncoderStreamsAVEFactory
+            if ($line =~ /^([+-]) \.\/AppleInternal\/Diags\/Tests\/AppleSOC\/([^\/]*)\/H264$/) {
+                $GESAFP{$2} = 1 if $1 eq "+";
+                $GESAFM{$2} = 1 if $1 eq "-";
+            }
+            
+            # GoldenEncoderStreamsAVEFactory
+            if ($line =~ /^([+-]) \.\/AppleInternal\/Diags\/Tests\/AppleSOC\/([^\/]*)\/AVE$/) {
+                $GESA2FP{$2} = 1 if $1 eq "+";
+                $GESA2FM{$2} = 1 if $1 eq "-";
+            }
+
+            # FactoryOSDiagsExtras 
+            if ($line =~ /^([+-]) \.\/AppleInternal\/Diags\/Tests\/AppleSOC\/([^\/]*)\/HEVC$/ ||
+                $line =~ /^([+-]) \.\/AppleInternal\/Diags\/Tests\/AppleSOC\/(H6)$/) {
+                $FOSDEP{$2} = 1 if $1 eq "+";
+                $FOSDEM{$2} = 1 if $1 eq "-";
+            }
+
+        }
+
+    }
+
+    if (scalar (keys %testPlatforms) > 0 || scalar (keys %testPlatformsM) > 0 || scalar (%testPlatformsM > 0)) {
+        print "*** $options{'bom'}\n";
+        if (scalar (keys %testPlatformsP > 0)) {
+            my $platformCount = scalar (keys %testPlatformsP);
+            print "* We found $platformCount platform test/s added to $options{'bom'}:\n";
+            foreach my $platform (keys (%testPlatformsP)) {
+                print "\t$platform";;
+            }
+
+            if (scalar (keys %GESAFP > 0)) {
+                print "\tGoldenEncoderStreamsAVEFactory added these platforms:\n";
+                foreach my $platform (sort (keys %GESAFP)) {
+                    print "\t\t$platform\n";
+                }
+            }
+
+            if (scalar keys %GESA2FP > 0) {
+                print "\tGoldenEncoderStreamsAVE2Factory added these platforms:\n";
+                foreach my $platform (sort (keys %GESA2FP)) {
+                    print "\t\t$platform\n";
+                }
+            }
+
+            if (scalar keys %FOSDEP > 0) {
+                print "\tFactoryOSDiagsExtras added these platforms:\n";
+                foreach my $platform (sort (keys %FOSDEP)) {
+                    print "\t\t$platform\n";
+                }
+            }
+        }
+
+        if (scalar (keys %testPlatformsM > 0)) {
+            my $platformCount = scalar (keys %testPlatformsM);
+            print "* We found $platformCount platform test/s removed from $options{'bom'}:\n";
+            foreach my $platform (scalar (keys %testPlatformsM)) {
+                print "\t$platform";
+            }
+
+            if (scalar (keys %GESAFM > 0)) {
+                print "\tGoldenEncoderStreamsAVEFactory removed these platforms:\n";
+                foreach my $platform (sort (keys %GESAFM)) {
+                    print "\t\t$platform\n";
+                }
+            }
+
+            if (scalar (keys %GESA2FM > 0)) {
+                print "\tGoldenEncoderStreamsAVE2Factory removed these platforms:\n";
+                foreach my $platform (sort (keys %GESA2FM)) {
+                    print "\t\t$platform\n";
+                }
+            }
+
+            if (scalar (keys %FOSDEM > 0)) {
+                print "\tFactoryOSDiagsExtras removed these platforms:\n";
+                foreach my $platform (sort (keys %FOSDEM)) {
+                    print "\t\t$platform\n";
+                }
+            }
+        }
+ 
+        if (scalar (keys %testPlatforms > 0)) {
+            my $platformCount = scalar (keys %testPlatforms);
+            print "SUMMARY: We found $platformCount platform test/s in $options{'bom'}:\n";
+            foreach my $platform (sort (keys %testPlatforms)) {
+                print "\t$platform";
+            }
+
+            if (scalar (keys %GESAF > 0)) {
+                print "\tGoldenEncoderStreamsAVEFactory has these platforms:\n";
+                foreach my $platform (sort (keys %GESAF)) {
+                    print "\t\t$platform\n";
+                }
+            }
+
+            if (scalar (keys %GESA2F > 0)) {
+                print "\tGoldenEncoderStreamsAVE2Factory has these platforms:\n";
+                foreach my $platform (sort (keys %GESA2F)) {
+                    print "\t\t$platform\n";
+                }
+            }
+
+            if (scalar (keys %FOSDE > 0)) {
+                print "\tFactoryOSDiagsExtras has these platforms:\n";
+                foreach my $platform (sort (keys %FOSDE)) {
+                    print "\t\t$platform\n";
+                }
+            }
+        }
+
+       print "\n\n";
+    }
+}
+
+sub simplifyTestMasterResult {
+    my %options = validate (
+        @_,
+        {   resultFile => { type => SCALAR, optional => 0 },
+        }
+    );
+
+    my $resultFileHandle;
+    if ( ! open $resultFileHandle, '<', $options{'resultFile'} ) {
+        print "ERROR: unable to open $options{'resultFile'}\n";        
+        return;
+    }
+    
+    print "Begining simplification of $options{'resultFile'}...\n";
+
+    while (my $line = <$resultFileHandle>) {
+        if ($line =~ /#########/) {
+            print "\n$line";
+        }
+        elsif ($line =~ /[+-] \.\/AppleInternal\/Diags\/Tests\/AppleSOC\/[^\/]*$/) {
+            print "$line";
+        }
+    }
+}
+
+sub main {
+    my %args = parseArgs();
+
+    auditBoms(pkgBomDir     => $args{'pkgbomdir'},
+              tmresult      => $args{'tmresult'},
+              osFinalOnly   => $args{'osfinalonly'},
+              verbose       => $args{'verbose'},
+   );
+}
+
+main();
+

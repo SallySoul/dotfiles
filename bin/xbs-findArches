@@ -1,0 +1,110 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use Cortex;
+use Getopt::Long;
+use Params::Validate qw(:all);
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+A tool to find all projects that build / don't build for one or more target architectures
+
+Mandatory Flags:
+    -train  <train>             The train to run the query on
+    -output <file>              The deps file to dump the findings into
+
+Options:
+    -help                       Brings up the usage menu
+    -target <arch>              A target architecture that should be included, can be passed multiple times
+    -ntarget <arg>              A target architecture that should not be inlcuded, can be pased multiple times
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    my @targets;
+    my @not_targets;
+    
+    usage()
+        unless GetOptions(
+            \%args, 'output=s', 'help',
+            'train=s', 'output=s',
+            'target=s' => \@targets,
+            'ntarget=s' => \@not_targets,
+        );
+
+    # Validate input
+    usage if $args{help};
+    usage("You must pass -train <train>") if ! $args{train};
+    usage("You must pass -output <file>") if ! $args{output};
+
+    $args{targets} = \@targets;
+    $args{not_targets} = \@not_targets;
+    return %args;    
+}
+
+sub main {
+    my %args = parseArgs();
+
+    my $cortex = Cortex->new();
+    my @cortex_results = $cortex->listProjectAttributes(
+        train => $args{train},
+        returnFields => [ 'project', 'targetArchitectures' ],
+    );
+
+    my $output_handle;
+    if ( ! open $output_handle, '>', $args{output} ) {
+        print "ERROR: unable to open handle for $args{output}\n$!\n";
+        return;
+    }
+
+    my $project_count = 0;
+    foreach my $project (@cortex_results) {
+        my $name = $project->project();
+        if ( $name =~ /_Sim/ ) {
+
+        }
+        elsif ($name =~ /_Loc_/) {
+            
+        } 
+        else {
+            my @arches = @{$project->targetArchitectures()};
+            my $check= 1;
+
+            # For each target we wont, chech that it is included
+            foreach my $a (@{$args{targets}}) {
+                $check = $check && (grep /^$a$/, @arches);
+            }
+
+            # For each target we DON'T want, check that it is not included
+            foreach my $a (@{$args{not_targets}}) {
+                $check = $check && ( ! grep /^$a$/, @arches);
+            }
+    
+            if ($check) {
+                print $output_handle "$name\n";
+                $project_count += 1;
+            }
+        }
+    }
+
+    close $output_handle;
+    print "We found $project_count projects:\n";
+
+    print "\tbuilding for ";
+    map { print "$_ "; } @{$args{targets}};
+    print "\n";
+
+    print "\tnot building for ";
+    map { print "$_ "; } @{$args{not_targets}};
+    print "\n";
+}
+
+main();

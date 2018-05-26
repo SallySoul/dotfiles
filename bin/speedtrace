@@ -1,0 +1,218 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+BEGIN {
+    our $BNI = ( getpwnam('bni') )[7];
+    do "$BNI/plib/InitBNI.pm" or die $@;
+}
+
+use BNI::Radar;
+use Getopt::Long;
+use JSON::XS;
+use Params::Validate qw(:all);
+use Term::ANSIColor;
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+A tool to do something
+
+Mandatory Flags:
+    -log                        The log file to trace
+
+Options:
+    -output <file>              Save the symbolicated log to file
+    -associate <radar-id>       Associate a radar with the crash
+    -printlog                   Print the symbolicated log
+    -dumplog                    Put the symbolicated log directly in a file
+    -help                       Brings up the usage menu
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    
+    usage()
+        unless GetOptions(
+            \%args, 'log=s', 'help',
+            'output=s', 'associate=s',
+            'dumplog', 'printlog'
+        );
+
+    # Validate input
+    usage if $args{help};
+    usage("You must pass -log <file>") if ! $args{'log'};
+
+    return %args;    
+}
+
+sub establishKerberosCredentials {
+    my $krb;
+
+    # If were NOT outputting to a tty, and we are root then get LRE credentials
+    if ( !-t STDIN && !-t STDOUT && $> == 0 ) {
+        $krb = BNI::Auth::getLRECredentials();
+    }
+    # Otherwise, we need to establish credentials? TODO learn what you are saying
+    else {
+        my $status;
+        ( $status, undef, $krb )
+            = CBL::Kerberos::KrbConnect->establishCredsForLREService( preferRealUser => 1 );
+        if ($status) {
+            die(      'Establishing Kerberos credentials failed. Try running '
+                    . '`kdestroy -A` and then calling this tool again.' );
+        }
+        my $message = 'Credentials established for: ' . $krb->krbUser() . '@' . $krb->realm();
+        print "$message\n";
+        # TODO fix this print mess
+    }
+
+    return $krb;
+}
+
+sub post_log {
+    my %options = validate (
+        @_,
+        {   log => { type => SCALAR, optional => 0 },
+        }
+    );
+
+    # Yes shelling out is selling out
+    # BUT
+    # If you want to figure out how to use LWP::UserAgent to upload files 
+    # Please do.
+    #
+    # So we use curl to post the file
+
+    my $command = "curl"
+    . " --silent"
+    . " --header \"X-ST-GroupName: ebuild\""
+    . " -F \"log_content=\@$options{'log'}\""
+    . " https://speedtracer.apple.com/api/v2/trace";
+
+    my $output = `$command`;
+    
+    if ($output =~ /^curl: \(26\) couldn't open file/) {
+        print "ERROR: could not open $options{'log'}\n";
+        exit 1;
+    }
+
+    if ($output =~ /<title>(\d* ?Internal Server Error)<\/title>/) {
+        print "ERROR: speedtracer returned \"$1\"\n";
+        print "Try again later?\n";
+        exit 1;
+    }
+
+    my $response = decode_json($output);    
+    
+    return $response;
+}
+
+sub associate_radar {
+    my %options = validate(
+        @_,
+        {   log         => { type => SCALAR, optional => 0 },
+            krb_user    => { type => SCALAR, optional => 0 },
+            radar_id    => { type => SCALAR, optional => 0 },
+        }
+    );
+
+    my $command = "curl"
+    . " --silent"
+    . " -u $options{'krb_user'}"
+    . " -F \"radar_id=$options{'radar_id'}\""
+    . " -F \"log_content=\@$options{'log'}\"" 
+    . " https://speedtracer.apple.com/api/radars/associate";
+    
+    print "You will now be prompted for you OD password:\n";
+    my $output = `$command`;
+    
+    my $response = decode_json($output);
+    
+    print color('bright_magenta');
+    print "Response from request to Associate Radar:\n";
+    print color('reset');
+
+    foreach my $key (sort (keys $response)) {
+        print color('bright_magenta');
+        print "$key:\n";
+        print color('reset');
+
+        print "\t$response->{$key}\n\n";
+    }
+}
+
+sub main {
+    my %args = parseArgs();
+    
+ 
+    my $krb = establishKerberosCredentials();
+    my $krb_user = $krb->krbUser();
+    my $radar_handle = BNI::Radar->new( user => $krb_user );
+
+    if ($args{'associate'}) {
+        associate_radar(
+            log => $args{'log'},
+            krb_user => $krb_user,
+            radar_id => $args{'associate'},
+        );
+        exit 0;
+    }
+
+    my $response = post_log(log=> $args{'log'});
+
+    my @radars;
+    if ($response->{'radars'} && scalar @{$response->{'radars'}} > 0) {
+        my @radar_ids = map $_->{'radar_id'}, @{$response->{'radars'}};
+        my $radars_ref = $radar_handle->problemsWithRadarIDs( ids => \@radar_ids );
+        @radars = @{$radars_ref};
+    }    
+   
+    print color('bright_magenta');
+    print "Tracer URL:\n";
+    print color('reset');
+    if ($response->{'tracer_url'}) {
+        print "\t$response->{'tracer_url'}\n";
+    } else {
+        print "\tNo tracer URL?\n";
+    }
+
+    print color('bright_magenta');
+    print "Associated Radars:\n";
+    print color('reset');
+    
+    if (scalar @radars > 0) {
+        foreach my $radar (@radars) {
+            print "\t[$radar->{state}] <rdar://problem/$radar->{id}> $radar->{title}\n";
+        }
+        print "\n";   
+    } else {
+        print "\tNo accociated radars\n\n";
+    }
+
+    if ($args{'printlog'}) {
+        print color('bright_magenta');
+        print "Symbolicated Log:\n";
+        print color('reset');
+
+        print $response->{'symbolicated_log'};
+    }
+
+    if ($args{'dumplog'}) {
+        my $output_handle;
+        if ( ! open $output_handle, '>', $args{'dumplog'} ) {
+            print "ERROR: unable to write to $args{'dumplog'}\n$!\n";
+        }
+
+        print $output_handle $response->{'symbolicated_log'};
+    }
+}
+
+main();
+

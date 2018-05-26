@@ -1,0 +1,138 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use File::Path;
+use Getopt::Long;
+use Params::Validate qw(:all);
+use Sudo;
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+This tool is used to move a project from one binary store to another.
+It fixes the symlinks in all trains, dittos the binaries from the old store
+to the new one, and finally it removes the project from the old binary store.
+
+Mandatory Flags:
+    -project / -p <project>     The project that needs to be fixed up
+    -oldstore <Binaries##>      The old binaries store
+    -newstore <Binaries##>      The new binaries store
+    -execute                    This tool won't do anything unless you pass -execute
+
+Options:
+    -help                       Brings up the usage menu
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    my @backed_up_argv = @ARGV;
+
+    usage()
+        unless GetOptions(
+            \%args, 'input=s', 'help',
+            'project=s', 'newstore=s', 'oldstore=s',
+            'execute',
+        );
+
+    # Validate input
+    usage if $args{help};
+    usage("You must pass -project <project>") if ! $args{project};
+    usage("You must pass -oldstore <Binaries##>") if ! $args{oldstore};
+    usage("You must pass -newstore <Binaries##>") if ! $args{newstore};
+    
+    # Relaunch as sudo if we're doin it
+    Sudo::sudoExec(@backed_up_argv) if $args{execute};    
+
+    return %args;    
+}
+
+sub main {
+    my %args = parseArgs();
+    
+    # First, let's ensure that the project exists in both binary stores already
+    my $old_target = "/SWE/iOS/Binaries/$args{oldstore}/$args{project}";
+    my $new_target = "/SWE/iOS/Binaries/$args{newstore}/$args{project}";
+    if (! -e $old_target) {
+        print "ERROR: $old_target does not exist...\n"; 
+        return;
+    }
+    if (! -e $new_target) {
+        print "ERROR: $new_target does not exist...\n";
+        return;
+    }
+    
+    # Next we need to get all the buildrecord links for this projet in the view
+    my @project_links = glob "/SWE/release/Software/*/BuildRecords/$args{project}";
+    my $link_count = scalar @project_links;
+    print "Found $link_count potential links...\n";
+
+    # Now we need to find all the link that point to the old store
+    my @bad_links;
+    foreach my $link (@project_links) {
+        # is this even a symlink?
+        if ( -l $link) {
+            my $target = readlink($link);
+
+            # is the target of the symlink the right format?
+            if ($target =~ /(?:\/SWE\/iOS\/Binaries|\.\.\/\.\.\/\.\.)\/(.*)\/$args{project}/) {
+
+                # Is the binary store being pointed to the old one?
+                if ($1 eq $args{oldstore}) {
+                    push @bad_links, $link;
+                } else {
+                    print "WARN: $link points to $1\n";
+                }
+            } else {
+                print "WARN: $link target seems malformed: $target\n";
+            }
+        } else {
+            print "WARN: $link is not a symlink\n";
+        }
+    }
+    my $bad_link_count = scalar @bad_links;
+    print "Found $bad_link_count links to be fixed...\n";
+    
+    # Now we need to unlink the old link
+    foreach my $bad_link (@bad_links) {
+        print "Unlinking\t$bad_link\n";
+        print "Setting\t\t$bad_link -> $new_target\n";
+
+        if ($args{execute}) {
+            if ( ! unlink($bad_link) ) {
+                print "ERROR: Unable to unlink $bad_link\n$!\n";
+                next;
+            }
+            if ( ! symlink($new_target, $bad_link) ) {
+                print "ERROR: Unable to link $bad_link -> $new_target\n$!\n";
+            }
+        }
+    }
+    
+    # Now, lets move all the old binaries
+    print "ditto $old_target $new_target\n";
+    if ($args{execute}) {
+        `ditto $old_target $new_target`;
+    }
+
+    # Last, remove the old binary store
+    print "Removing $old_target\n";
+    if ($args{execute}) {
+        if ( ! File::Path::rmtree $old_target) {
+            print "ERROR: unable to remove $old_target\n$!\n";
+        }
+    }
+
+    if ( ! $args{execute} ) {
+        print "You must pass -execute, and be root, for these changes to take affect...\n";
+    }
+}
+
+main();
+

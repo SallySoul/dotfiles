@@ -1,0 +1,37 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+# All the info is here:
+# https://www.digitalocean.com/community/tutorials/how-to-route-web-traffic-securely-without-a-vpn-using-a-socks-tunnel
+
+sub main {
+
+    my $user = "russell_bentley";
+    my $server = "biscotti.sd.apple.com";
+    my $port = 8123;
+    my $sshCommand = "ssh -D $port -f -C -q -N $user\@$server";
+    
+    system($sshCommand);
+
+    # Verify that it is up and running
+    my $check = `ps aux | grep ssh`;
+    my $test = `echo \"Test output!!!!! ****\"`;
+    my $check2 = `ps aux | grep \"$sshCommand\"`;
+    print "check2: $check2";
+
+    print "Does this look correct?\n$check\n";
+
+    print "If so, follow these instructions:
+Go to: Open Menu (to right corner) 
+-> Preferences
+-> Advances (lowest left)
+-> Network (top tab)
+-> Settings
+-> Manual proxy configugation, SOCKS Host: \"localhost\", port: \"$port\", SOCKS v5
+Click Ok and you should be good!\n";
+
+}
+
+main();

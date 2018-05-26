@@ -1,0 +1,117 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use Cortex;
+use Getopt::Long;
+use Params::Validate qw(:all);
+
+sub usage {
+    print "ERROR: $_[0]\n\n" if $_[0];
+
+    my $message = "
+A tool to do something
+
+Mandatory Flags:
+    -defdeps <file>             The deps file to dump train default projects
+    -specdeps <file>            The deps file to dump projects with train-project rules
+    -train <train>              The train to run the query on
+
+Options:
+    -help                       Brings up the usage menu
+";   
+
+    print $message;
+    
+    exit 1; 
+}
+
+sub parseArgs {
+    my %args;
+    
+    usage()
+        unless GetOptions(
+            \%args, 'defdeps=s', 'help',
+            'specdeps=s', 'train=s',
+        );
+
+    # Validate input
+    usage if $args{help};
+    usage("You need to pass -defdeps <file>") if ! $args{defdeps};
+    usage("You need to pass -specdeps <file>") if ! $args{specdeps};
+    usage("You need to pass -train <train>") if ! $args{train};
+
+    return %args;    
+}
+
+sub main {
+    my %args = parseArgs();
+
+    my $cortex = Cortex->new();
+
+    my @train_results = $cortex->listTrainRules(
+        train => $args{train},
+        returnFields => [ 'targetArchitectures' ],
+    );
+
+    if ( ! $train_results[0] ) {
+        print "ERROR: unable to querty default architectures for $args{train}\n";
+        return;
+    } else {
+        print "$args{train} has target architectures as ";
+        map { print "$_ " } @{$train_results[0]->targetArchitectures()};
+        print "\n";
+    }
+
+    my @project_attributes = $cortex->listProjectRules(
+        train => $args{train},
+        returnFields => [ 'project', 'targetArchitectures'],
+    );
+    
+    my $project_count = scalar @project_attributes;
+    my $sim_count = 0;
+    my $def_count = 0;
+    my $spec_count = 0;
+
+    my $def_handle;
+    if ( ! open $def_handle, '>', $args{defdeps} ) {
+        print "ERROR: unable to open handle for $args{defdeps}\n$!\n";
+        return;
+    }
+
+    my $spec_handle;
+    if ( ! open $spec_handle, '>', $args{specdeps} ) {
+        print "ERROR: unable to open handle for $args{specdeps}\n$!\n";
+        return;
+    }
+
+    foreach my $project (@project_attributes) {
+        my $name = $project->project();
+        
+        if ( ! $name ) {
+            next;
+        } 
+        elsif ($name =~ /_Sim$/) {
+            $sim_count += 1;
+        } 
+        elsif ( $project->targetArchitectures() ) {
+            $spec_count += 1;  
+            print $spec_handle "$name\n";
+        }    
+        else {
+            $def_count += 1;
+            print $def_handle "$name\n";
+        }
+    }
+
+    close $def_handle;
+    close $spec_handle;
+
+    print "There are $project_count projects in $args{train}\n";
+    print "\tSim count: $sim_count\n";
+    print "\tdef count: $def_count\n";
+    print "\tspec count: $spec_count\n";
+}
+
+main();
+
