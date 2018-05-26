@@ -71,14 +71,17 @@ alias tree='exa --all --long --tree -I .git'
 alias mtreel='exa --all --tree -I .git --color=always | less -R'
 alias treel='exa --all --long --tree -I .git --color=always | less -R'
 
+# NeoVim aliases
+alias view='nvim -R'
+alias vim='nvim'
+alias tvim='nvim term://zsh'
+alias openProject="find . -regex '\./src/.*\.rs' -or -name Cargo.toml | xargs nvim term://zsh"
+
 # misc aliases
 alias fd='fd --hidden'
 alias alert='echo "\a"'
 alias vzsh='view ~/.zshrc'
-alias view='nvim -R'
 alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
-alias vim='nvim'
-alias tvim='nvim term://zsh'
 
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
