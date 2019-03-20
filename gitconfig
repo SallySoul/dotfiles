@@ -1,5 +1,5 @@
 [user]
-	name = ThermalSpan 
+	name = RussellBentley
 	email = russell.w.bentley@icloud.com
 [merge]
 	tool = vimdiff
@@ -10,3 +10,5 @@
 	autoStash = true
 [pull]
 	rebase = true
+[credential]
+	helper = osxkeychain

@@ -17,6 +17,9 @@ function col_echo {
 }
 col_echo "Running ~/.zshrc ..." 3
 
+# Update prompt
+PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
+
 ######################
 # Shell  Settings
 ######################
@@ -67,7 +70,7 @@ alias i="echo \"host: $(hostname)\"; echo \"CPU Cores: `/usr/sbin/sysctl -n hw.n
 alias ls='exa --all'
 alias ll='exa --all --long --header'
 alias lll='exa --all --long --header --color=always | less -R'
-alias tree='exa --all --long --tree -I .git'
+alias tree='exa --long --tree -I .git'
 alias mtreel='exa --all --tree -I .git --color=always | less -R'
 alias treel='exa --all --long --tree -I .git --color=always | less -R'
 
@@ -86,9 +89,11 @@ alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
 
-
-# Update prompt
-PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
+# Work
+alias drun='docker run -it -v ${PWD}:/app'
+alias dcrw='docker-compose run web'
+alias dcrwbe='docker-compose run web bundle exec'
+alias drails='dcrwbe bin/rails'
 
 ######################
 # Functions
