@@ -37,4 +37,5 @@ let g:racer_cmd = "/Users/russell/.cargo/bin/racer"
 
 nmap <space>1 :edit term://zsh<CR>
 
-" other perl stuff
+" We want vimfiler to show us 'dotfiles'
+let g:vimfiler_ignore_pattern = '^\%(\.git\|\.DS_Store\)$'

@@ -69,10 +69,10 @@ alias i="echo \"host: $(hostname)\"; echo \"CPU Cores: `/usr/sbin/sysctl -n hw.n
 # exa aliases
 alias ls='exa --all'
 alias ll='exa --all --long --header'
-alias lll='exa --all --long --header --color=always | less -R'
+alias lll='exa --long --header --color=always | less -R'
 alias tree='exa --long --tree -I .git'
-alias mtreel='exa --all --tree -I .git --color=always | less -R'
-alias treel='exa --all --long --tree -I .git --color=always | less -R'
+alias mtreel='exa --tree -I .git --color=always | less -R'
+alias treel='exa --long --tree -I .git --color=always | less -R'
 
 # NeoVim aliases
 alias view='nvim -R'
@@ -91,6 +91,7 @@ alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
 
 # Work
 alias drun='docker run -it -v ${PWD}:/app'
+alias drunmklvtk='docker run -it -v ${PWD}:/app ataber/mkl_vtk:master'
 alias dcrw='docker-compose run web'
 alias dcrwbe='docker-compose run web bundle exec'
 alias drails='dcrwbe bin/rails'
