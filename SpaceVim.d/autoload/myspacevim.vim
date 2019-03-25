@@ -3,4 +3,6 @@ function! myspacevim#after() abort
     let g:vimfiler_ignore_pattern = '^\%(\.git\|\.DS_Store\)$'
 
     nmap <space>1 :edit term://zsh<CR> 
+
+    nmap ; :
 endfunction

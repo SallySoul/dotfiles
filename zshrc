@@ -130,7 +130,7 @@ function edit {
         tmux source-file ~/.tmux.conf
         ;;
     SpaceVim)
-        nvim ~/.SpaceVim.d/init.vim
+        nvim ~/.SpaceVim.d/init.toml
         ;;
     *)
         echo "$1 is not in edit ..."
