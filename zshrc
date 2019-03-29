@@ -59,6 +59,7 @@ alias gist='git status && git diff | tee /dev/tty | pbcopy'
 alias gim='git commit -a -m'
 alias gip='git pull'
 alias gitlog='git log --graph'
+alias removeUntrackedFiles='sudo git ls-files --others --exclude-standard | xargs rm -rf'
 
 # less always needs color~
 alias less='less -R'
