@@ -96,6 +96,7 @@ alias drunmklvtk='docker run -it -v ${PWD}:/app ataber/mkl_vtk:master'
 alias dcrw='docker-compose run web'
 alias dcrwbe='docker-compose run web bundle exec'
 alias drails='dcrwbe bin/rails'
+alias docker-clean="docker ps -aqf status=exited | xargs docker rm && docker images -qf dangling=true | xargs docker rmi"
 
 ######################
 # Functions
