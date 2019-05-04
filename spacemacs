@@ -52,9 +52,9 @@ values."
      yaml
      javascript
      (shell :variables
-            shell-default-shell 'ansi-term
+            shell-default-shell 'term
             shell-default-height 30
-            shell-default-term-shell "/bin/zsh"
+            shell-default-term-shell "/usr/local/bin/zsh"
             shell-default-position 'bottom)
      (markdown :variables markdown-live-preview-engine 'vmd)
      (version-control :variables

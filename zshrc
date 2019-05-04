@@ -18,7 +18,12 @@ function col_echo {
 col_echo "Running ~/.zshrc ..." 3
 
 # Update prompt
-PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
+if [ -v $EMACS ]
+then
+  PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
+else
+  PROMPT="%{$(tput setaf 2)%}%1~:%n$%{$(tput sgr0)%} "
+fi
 
 ######################
 # Shell  Settings
