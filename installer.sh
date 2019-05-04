@@ -5,7 +5,7 @@ function col_echo {
 }
 
 # These files exists, <file> exist in dotfiles, and need to be linked to .<file> in ~
-baseFiles="tmux.conf bashrc bash_profile gitconfig zshrc"
+baseFiles="spacemacs tmux.conf bashrc bash_profile gitconfig zshrc"
 # These are like the above, except that they are directories. 
 baseDirs="SpaceVim.d"
 

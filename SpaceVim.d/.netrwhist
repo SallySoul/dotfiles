@@ -1,4 +1,8 @@
 let g:netrw_dirhistmax  =10
-let g:netrw_dirhist_cnt =2
+let g:netrw_dirhist_cnt =6
 let g:netrw_dirhist_1='/Users/russell/dotfiles/SpaceVim.d'
 let g:netrw_dirhist_2='/Users/russell/work/SnSCore/.git'
+let g:netrw_dirhist_3='/Users/russell/work/cereal_exp/.git'
+let g:netrw_dirhist_4='/Users/russell/projects/tacit/implicit-mesh'
+let g:netrw_dirhist_5='/Users/russell/work/SnSCore/test/08voxel'
+let g:netrw_dirhist_6='/Users/russell/work/SnSCore/test/08voxel/dm_voxel'

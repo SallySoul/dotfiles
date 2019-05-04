@@ -25,6 +25,7 @@ PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%}î‚
 ######################
 
 # Update env variables
+export PATH=$PATH:/usr/local/bin
 export PATH=$PATH:~/dotfiles/bin
 export PATH=$PATH:~/bin
 export PATH=$PATH:~/scripts
