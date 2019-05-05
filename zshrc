@@ -5,6 +5,7 @@
 # If this is not an interactive session then we don't need to run all this
 # In fact, running this could be a problem.
 # For scp and the like
+
 if [[ ! $- =~ "i" ]]
 then
     return
@@ -71,7 +72,8 @@ alias removeUntrackedFiles='sudo git ls-files --others --exclude-standard | xarg
 alias less='less -R'
 
 # Info / Inspect aliases
-alias i="echo \"host: $(hostname)\"; echo \"CPU Cores: `/usr/sbin/sysctl -n hw.ncpu`\""
+alias ip="ifconfig | rg 'inet\s+(\d{3}\.\d{3}\.\d\.\d{3})' -o -r '\$1'"
+alias i="echo \"host: $(hostname)\"; echo \"ip: `ip`\"; echo \"CPU Cores: `/usr/sbin/sysctl -n hw.ncpu`\""
 
 # exa aliases
 alias ls='exa --all'
