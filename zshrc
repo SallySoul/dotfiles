@@ -67,6 +67,7 @@ alias gim='git commit -a -m'
 alias gip='git pull'
 alias gitlog='git log --graph'
 alias removeUntrackedFiles='sudo git ls-files --others --exclude-standard | xargs rm -rf'
+alias fixSubmodules='git submodule update --init --recursive'
 
 # less always needs color~
 alias less='less -R'
@@ -94,13 +95,14 @@ alias fd='fd --hidden'
 alias alert='echo "\a"'
 alias vzsh='view ~/.zshrc'
 alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
+alias emacs='emacsclient -n'
 
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
 
 # Work
 alias drun='docker run -it -v ${PWD}:/app'
-alias drunmklvtk='docker run -it -v ${PWD}:/app ataber/mkl_vtk:master'
+alias drunmklvtk='docker run --privileged -it -v ${PWD}:/app ataber/mkl_vtk:master'
 alias dcrw='docker-compose run web'
 alias dcrwbe='docker-compose run web bundle exec'
 alias drails='dcrwbe bin/rails'
