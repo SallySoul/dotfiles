@@ -75,6 +75,7 @@ alias less='less -R'
 # Info / Inspect aliases
 alias ip="ifconfig | rg 'inet\s+(\d{3}\.\d{3}\.\d\.\d{3})' -o -r '\$1'"
 alias i="echo \"host: $(hostname)\"; echo \"ip: `ip`\"; echo \"CPU Cores: `/usr/sbin/sysctl -n hw.ncpu`\""
+alias spacereport="du -h -d 2 . | sort -k 1 -h | less"
 
 # exa aliases
 alias ls='exa --all'
@@ -96,6 +97,8 @@ alias alert='echo "\a"'
 alias vzsh='view ~/.zshrc'
 alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
 alias emacs='emacsclient -n'
+alias fixSubmodules='git submodule update --init --recursive'
+alias runSketch='processing-java --sketch=$(pwd) --output=$(pwd)/output --force --run'
 
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
