@@ -106,6 +106,7 @@ alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
 # Work
 alias drun='docker run -it -v ${PWD}:/app'
 alias drunmklvtk='docker run --privileged -it -v ${PWD}:/app ataber/mkl_vtk:master'
+alias drunmfem='docker run --privileged -it -v ${PWD}:/app ataber/mfem_mkl:master'
 alias dcrw='docker-compose run web'
 alias dcrwbe='docker-compose run web bundle exec'
 alias drails='dcrwbe bin/rails'
