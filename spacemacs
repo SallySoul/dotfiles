@@ -36,6 +36,7 @@ values."
    dotspacemacs-configuration-layers
    '(
      html
+     graphviz
      ruby
      ;; ----------------------------------------------------------------
      ;; Example of useful layers you may want to use right away.

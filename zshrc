@@ -113,6 +113,7 @@ alias pbcopy='xclip -selection clipboard'
 alias pbpaste='xclip -selection clipboard -o'
 alias fixSound='sudo alsa force-reload'
 alias typeracer='npm - -global typeracer-cli'
+alias fullpath='echo $(pwd)/$1'
 
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
