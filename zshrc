@@ -15,11 +15,12 @@ function col_echo {
     tput setaf $2
     echo $1
     tput sgr0
+
 }
 col_echo "Running ~/.zshrc ..." 3
 
 # Update prompt
-if [ -v $EMACS ]
+if [ -v $INSIDE_EMACS ]
 then
   PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
 else
@@ -36,6 +37,8 @@ export PATH=$PATH:~/dotfiles/bin
 export PATH=$PATH:~/bin
 export PATH=$PATH:~/scripts
 export PATH=$PATH:~/.cargo/bin
+export PATH=$PATH:~/.local/bin
+export PATH=$PATH:~/.yarn/bin
 
 export EMAIL_ADDRESS='russell.w.bentley@icloud.com'
 export NOTES_DIRECTORY=~/projects/notes
@@ -61,6 +64,8 @@ alias tmls='tmux ls'
 alias tmks='tmux kill-server'
 
 # git aliases
+alias gdi='git diff --no-index'
+alias gis='git status'
 alias gid='git diff | tee /dev/tty | pbcopy'
 alias gist='git status && git diff | tee /dev/tty | pbcopy'
 alias gim='git commit -a -m'
@@ -68,6 +73,10 @@ alias gip='git pull'
 alias gitlog='git log --graph'
 alias removeUntrackedFiles='sudo git ls-files --others --exclude-standard | xargs rm -rf'
 alias fixSubmodules='git submodule update --init --recursive'
+alias git-clang-form="git status | \
+rg '\W+(modified|new file):\W+([a-zA-Z./]+)' -r '$2' | \
+rg '\.(cpp|h)$' | \
+xargs clang-format -i --style=file"
 
 # less always needs color~
 alias less='less -R'
@@ -99,18 +108,24 @@ alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
 alias emacs='emacsclient -n'
 alias fixSubmodules='git submodule update --init --recursive'
 alias runSketch='processing-java --sketch=$(pwd) --output=$(pwd)/output --force --run'
+alias spotify='spotify --force-device-scale-factor=1.7'
+alias pbcopy='xclip -selection clipboard'
+alias pbpaste='xclip -selection clipboard -o'
+alias fixSound='sudo alsa force-reload'
+alias typeracer='npm - -global typeracer-cli'
 
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
 
 # Work
-alias drun='docker run -it -v ${PWD}:/app'
-alias drunmklvtk='docker run --privileged -it -v ${PWD}:/app ataber/mkl_vtk:master'
-alias drunmfem='docker run --privileged -it -v ${PWD}:/app ataber/mfem_mkl:master'
-alias dcrw='docker-compose run web'
-alias dcrwbe='docker-compose run web bundle exec'
-alias drails='dcrwbe bin/rails'
-alias docker-clean="docker ps -aqf status=exited | xargs docker rm && docker images -qf dangling=true | xargs docker rmi"
+alias drun='sudo docker run -it -v ${PWD}:/app'
+alias drunmklvtk='sudo docker run --privileged -it -v ${PWD}:/app ataber/mkl_vtk:master'
+alias drunmfem='sudo docker run --privileged -it -v ${PWD}:/app ataber/mfem_mkl:master'
+alias drunubuntu='sudo docker run --privileged -it -v ${PWD}:/app ubuntu'
+alias dcrw='sudo docker-compose run web'
+alias dcrwbe='sudo docker-compose run web bundle exec'
+alias drails='sudo dcrwbe bin/rails'
+alias docker-clean="sudo docker ps -aqf status=exited | xargs docker rm && docker images -qf dangling=true | xargs docker rmi"
 
 ######################
 # Functions
@@ -200,6 +215,36 @@ function btc {
     else
         cat ~/temp/t$(($BT_TEMP_NUM-1)).txt
     fi
+}
+
+function findType {
+  rg "(struct|class|trait|enum|using)\W*$1"
+}
+
+function formatChanges {
+    git status | \
+    rg '\W+(modified|new file):\W+([a-zA-Z./]+)' -r '$2' | \
+    rg '\.(cpp|h)$' | \
+    xargs clang-format -i --style=file
+}
+
+function killProgram {
+    PROGRAM=$1
+    ps -aux | rg -i $PROGRAM | head -n -1 | rg '^russell\W*(\d+).*' -r '$1' | xargs kill
+}
+
+function killDiscord {
+    PROGRAM=discord
+    ps -aux | rg -i $PROGRAM | head -n -1 | rg '^russell\W*(\d+).*' -r '$1' | xargs kill
+}
+
+function killSlack {
+    PROGRAM=slack
+    ps -aux | rg -i $PROGRAM | head -n -1 | rg '^russell\W*(\d+).*' -r '$1' | xargs kill
+}
+
+function rgl {
+    rg $1 --color=always --heading --line-number | less
 }
 
 ######################
