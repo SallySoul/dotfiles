@@ -47,6 +47,7 @@ values."
      auto-completion
      better-defaults
      emacs-lisp
+     dhall
      git
      osx
      org
