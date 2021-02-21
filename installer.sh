@@ -2,6 +2,7 @@ function col_echo {
     tput setaf $2
 	echo "$1"
     tput sgr0
+
 }
 
 # These files exists, <file> exist in dotfiles, and need to be linked to .<file> in ~
@@ -16,7 +17,7 @@ baseDirs="SpaceVim.d"
 col_echo "Performing backup ..." 3
 
 # Create directory to put them in
-backupdir=~/dotfiles/backup/$(date "+%Y-%d-%h-%m-%s")
+backupdir=~/projects/dotfiles/backup/$(date "+%Y-%d-%h-%m-%s")
 mkdir -p $backupdir
 
 # Backup all relavent files
@@ -43,16 +44,13 @@ col_echo "Creating links ..." 3
 for l in $baseFiles
 do
     col_echo "\tlinking $l to ~/.$l ..." 5
-    ln -s -f ~/dotfiles/$l ~/.$l
+    ln -s -f ~/projects/dotfiles/$l ~/.$l
 done
 # create symbollic links for directories
 for l in $baseDirs
 do
     col_echo "\tlinking $l to ~/.$l ..." 5
-    ln -s -f ~/dotfiles/$l ~/.$l
+    ln -s -f ~/projects/dotfiles/$l ~/.$l
 done
-
-col_echo "Adding LaunchAgents ..." 3
-ditto LaunchAgents ~/Library/LaunchAgents
 
 col_echo "Done ..." 3

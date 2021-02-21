@@ -20,11 +20,21 @@ function col_echo {
 col_echo "Running ~/.zshrc ..." 3
 
 # Update prompt
-if [ -v $INSIDE_EMACS ]
+if [ $INSIDE_EMACS ]
 then
-  PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
+    col_echo "Emacs Session" 5
+    PROMPT="%{$(tput setaf 2)%}%1~:%n$%{$(tput sgr0)%} "
 else
-  PROMPT="%{$(tput setaf 2)%}%1~:%n$%{$(tput sgr0)%} "
+    col_echo "Not in Emacs" 5
+    PROMPT="%{$(tput setaf 16; tput setab 2)%}%1~:%n%{$(tput sgr0; tput setaf 2)%} %{$(tput sgr0)%}"
+fi
+
+# Optionally source Virtual Env
+if [ -d ~/.venv/bin/ ]
+then
+    col_echo "Setting up python virtual environtment" 3
+    export VIRTUAL_ENV_DISABLE_PROMPT=YES
+    source ~/.venv/bin/activate
 fi
 
 ######################
@@ -33,16 +43,12 @@ fi
 
 # Update env variables
 export PATH=$PATH:/usr/local/bin
-export PATH=$PATH:~/dotfiles/bin
-export PATH=$PATH:~/bin
-export PATH=$PATH:~/scripts
 export PATH=$PATH:~/.cargo/bin
-export PATH=$PATH:~/.local/bin
-export PATH=$PATH:~/.yarn/bin
 
+# What's this for again?
 export EMAIL_ADDRESS='russell.w.bentley@icloud.com'
-export NOTES_DIRECTORY=~/projects/notes
 
+# Why do we have this again?
 export LANG="en_US.UTF-8"
 export LC_COLLATE="en_US.UTF-8"
 export LC_CTYPE="en_US.UTF-8"
@@ -58,10 +64,6 @@ export LC_ALL="en_US.UTF-8"
 
 # escalate priviledges
 alias e='sudo zsh'
-
-# tmux aliases
-alias tmls='tmux ls'
-alias tmks='tmux kill-server'
 
 # git aliases
 alias gdi='git diff --no-index'
@@ -170,6 +172,10 @@ function edit {
     esac
 }
 
+# tmux aliases
+alias tmls='tmux ls'
+alias tmks='tmux kill-server'
+
 # Use to attach to tmux sessions, so that ssh forwarding is enabled
 # Note that we only want this behaivor when on an ssh connection
 function tmat {
@@ -181,54 +187,21 @@ function tmat {
     fi
 }
 
-# Run a background job and place it in the temp directory
-# Example: bt ls -la
-# Example: bt xbs cortex ...
-function bt {
-    if [ -z ${BT_TEMP_NUM+x} ]
-    then
-        echo "Initializing BT_TEMP_NUM"
-        BT_TEMP_NUM=0
-    fi
-
-    echo "Running \"$1\" and placing into t$BT_TEMP_NUM.txt"
-    eval "$@ > ~/temp/t$BT_TEMP_NUM.txt &"
-    BT_TEMP_NUM=$(($BT_TEMP_NUM+1))
-}
-
-# View the result of the last background job from bt
-function btv {
-    if [ -z ${BT_TEMP_NUM+x} ]
-    then
-        echo "BT_TEMP_NUM not initialized, try looking in ~/temp manually"
-        echo "ls ~/temp"
-    else
-        view ~/temp/t$(($BT_TEMP_NUM-1)).txt
-    fi
-}
-
-# cat the result of the last background job from bt
-function btc {
-    if [ -z ${BT_TEMP_NUM+x} ]
-    then
-        echo "BT_TEMP_NUM not initialized, try looking in ~/temp manually"
-        echo "ls ~/temp"
-    else
-        cat ~/temp/t$(($BT_TEMP_NUM-1)).txt
-    fi
-}
-
+# Knowledge Poor Man's C++ type finder
+# Usage: findType <Type>
 function findType {
   rg "(struct|class|trait|enum|using)\W*$1"
 }
 
+# Run clang-format-10 on all new or modified .cpp or .h files in dir
 function formatChanges {
     git status | \
     rg '\W+(modified|new file):\W+([a-zA-Z./]+)' -r '$2' | \
     rg '\.(cpp|h)$' | \
-    xargs clang-format -i --style=file
+    xargs clang-format-10 -i --style=file
 }
 
+# Kills program matching regex
 function killProgram {
     PROGRAM=$1
     ps -aux | rg -i $PROGRAM | head -n -1 | rg '^russell\W*(\d+).*' -r '$1' | xargs kill
@@ -244,6 +217,7 @@ function killSlack {
     ps -aux | rg -i $PROGRAM | head -n -1 | rg '^russell\W*(\d+).*' -r '$1' | xargs kill
 }
 
+# Page colored ripgrep output
 function rgl {
     rg $1 --color=always --heading --line-number | less
 }

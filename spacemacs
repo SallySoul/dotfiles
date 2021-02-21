@@ -65,7 +65,7 @@ values."
      (shell :variables
             shell-default-shell 'term
             shell-default-height 30
-            shell-default-term-shell "/usr/bin/zsh"
+            shell-default-term-shell "/bin/zsh"
             shell-default-position 'bottom)
      (markdown :variables markdown-live-preview-engine 'vmd)
      (version-control :variables
@@ -153,7 +153,7 @@ values."
    dotspacemacs-colorize-cursor-according-to-state t
    ;; Default font, or prioritized list of fonts. `powerline-scale' allows to
    ;; quickly tweak the mode-line size to make separators look not too crappy.
-   dotspacemacs-default-font '("Source Code Pro for Powerline"
+   dotspacemacs-default-font '("Source Code Pro"
                                :height 13
                                :weight normal
                                :width normal
