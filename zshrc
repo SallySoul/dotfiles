@@ -41,9 +41,23 @@ fi
 # Shell  Settings
 ######################
 
+source /opt/intel/mkl/bin/mklvars.sh intel64
+
 # Update env variables
 export PATH=$PATH:/usr/local/bin
 export PATH=$PATH:~/.cargo/bin
+export PATH=$PATH:~/.local/bin
+export PATH=$PATH:~/.yarn/bin
+export PATH=$PATH:/usr/local/cuda-11.0/bin
+export PATH=$PATH:~/work/scripts
+export CUDACXX=/usr/local/cuda-11.0/bin/nvcc
+export CXX=clang++
+export VTK_DIR=~/work/vtk_install/lib/cmake/vtk-8.2/
+
+# For penv
+export PATH="/home/russell/.pyenv/bin:$PATH"
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
 
 # What's this for again?
 export EMAIL_ADDRESS='russell.w.bentley@icloud.com'
@@ -107,7 +121,6 @@ alias fd='fd --hidden'
 alias alert='echo "\a"'
 alias vzsh='view ~/.zshrc'
 alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
-alias emacs='emacsclient -n'
 alias fixSubmodules='git submodule update --init --recursive'
 alias runSketch='processing-java --sketch=$(pwd) --output=$(pwd)/output --force --run'
 alias spotify='spotify --force-device-scale-factor=1.7'
@@ -117,23 +130,30 @@ alias fixSound='sudo alsa force-reload'
 alias typeracer='npm - -global typeracer-cli'
 alias fullpath='echo $(pwd)/$1'
 
+if [ $INSIDE_EMACS ]
+then
+    alias emacs='emacsclient -n'
+fi
+
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
 alias len="xargs -n 1 perl -lne 'END { print \"\$.\t\$ARGV\"; }'"
 
 # Work
 alias drun='sudo docker run -it -v ${PWD}:/app'
 alias drunmklvtk='sudo docker run --privileged -it -v ${PWD}:/app ataber/mkl_vtk:master'
-alias drunmfem='sudo docker run --privileged -it -v ${PWD}:/app ataber/mfem_mkl:master'
+alias drunmfem='sudo docker run --privileged -it -v ${PWD}:/app ataber/mfem_mkl:static-bionic'
+alias drunvdb='sudo docker run --privileged -it -v ${PWD}:/app ataber/mfem_vdb:static-bionic'
+alias drunc2rust='sudo docker run --privileged -it -v ${PWD}:/app 1cebc746030fb0a72844cd614c1e3d757b4138b079745be5328e501e5c0fe7ac'
 alias drunubuntu='sudo docker run --privileged -it -v ${PWD}:/app ubuntu'
 alias dcrw='sudo docker-compose run web'
 alias dcrwbe='sudo docker-compose run web bundle exec'
 alias drails='sudo dcrwbe bin/rails'
-alias docker-clean="sudo docker ps -aqf status=exited | xargs docker rm && docker images -qf dangling=true | xargs docker rmi"
+alias docker-clean="sudo docker ps -aqf status=exited | xargs sudo docker rm && sudo docker images -qf dangling=true | xargs sudo docker rmi"
 
 ######################
 # Functions
 ######################
-
+col_echo "Functions..." 4
 function colors {
     for i in $(seq 0 16)
     do
@@ -201,6 +221,11 @@ function formatChanges {
     xargs clang-format-10 -i --style=file
 }
 
+function format {
+    find core test test/inc cli -name '*.cpp' -or -name '*.h' | \
+    xargs clang-format-10 -i --style=file
+}
+
 # Kills program matching regex
 function killProgram {
     PROGRAM=$1
@@ -220,6 +245,10 @@ function killSlack {
 # Page colored ripgrep output
 function rgl {
     rg $1 --color=always --heading --line-number | less
+}
+
+function jim {
+    git commit -a -m $1 && git push
 }
 
 ######################
