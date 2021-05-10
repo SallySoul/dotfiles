@@ -94,6 +94,13 @@ rg '\W+(modified|new file):\W+([a-zA-Z./]+)' -r '$2' | \
 rg '\.(cpp|h)$' | \
 xargs clang-format -i --style=file"
 
+# Cargo Aliases
+alias ctl='cargo test --color always -- --nocapture 2>&1 | less'
+alias cbl='cargo build --color always 2>&1 | less'
+function cel {
+    cargo run --release --color always --example $1 2>&1 | less
+}
+
 # less always needs color~
 alias less='less -R'
 
@@ -120,12 +127,10 @@ alias openProject="find . -regex '\./src/.*\.rs' -or -name Cargo.toml | xargs nv
 alias fd='fd --hidden'
 alias alert='echo "\a"'
 alias vzsh='view ~/.zshrc'
-alias subl='/Applications/Sublime\ Text.app/Contents/SharedSupport/bin/subl'
+alias emacs='emacsclient -n'
 alias fixSubmodules='git submodule update --init --recursive'
 alias runSketch='processing-java --sketch=$(pwd) --output=$(pwd)/output --force --run'
 alias spotify='spotify --force-device-scale-factor=1.7'
-alias pbcopy='xclip -selection clipboard'
-alias pbpaste='xclip -selection clipboard -o'
 alias fixSound='sudo alsa force-reload'
 alias typeracer='npm - -global typeracer-cli'
 alias fullpath='echo $(pwd)/$1'
@@ -133,6 +138,17 @@ alias fullpath='echo $(pwd)/$1'
 if [ $INSIDE_EMACS ]
 then
     alias emacs='emacsclient -n'
+fi
+
+# Add pbcopy / pbpaste to non-macOS
+if [ `uname` != Darwin ]
+then
+    alias pbcopy='xclip -selection clipboard'
+    alias pbpaste='xclip -selection clipboard -o'
+else
+    export HYPRE_DIR=~/work/macos_dependencies/install_directory/hypre
+    export MFEM_DIR=~/work/macos_dependencies/install_directory/mfem
+    export VTK_DIR=~/work/macos_dependencies/install_directory/vtk
 fi
 
 # this one gets passed a list of filenames, will return <linecount>\t<filename>
@@ -245,10 +261,6 @@ function killSlack {
 # Page colored ripgrep output
 function rgl {
     rg $1 --color=always --heading --line-number | less
-}
-
-function jim {
-    git commit -a -m $1 && git push
 }
 
 ######################
