@@ -134,6 +134,7 @@ alias spotify='spotify --force-device-scale-factor=1.7'
 alias fixSound='sudo alsa force-reload'
 alias typeracer='npm - -global typeracer-cli'
 alias fullpath='echo $(pwd)/$1'
+alias rra='cargo run --release --example drumstick --color=always 2>&1 | less'
 
 if [ $INSIDE_EMACS ]
 then
@@ -145,7 +146,27 @@ if [ `uname` != Darwin ]
 then
     alias pbcopy='xclip -selection clipboard'
     alias pbpaste='xclip -selection clipboard -o'
+    function prepChanges {
+        col_echo "prepChanges for rra" 3
+        col_echo "cargo fmt" 4
+        cargo fmt
+        col_echo "clang-format" 4
+        clang-format-10 --style=llvm -i `find rra_sim '(' -name '*.cpp' -or -name '*.h' ')'  | xargs`
+        col_echo "cargo test" 4
+        cargo test
+    }
+
 else
+    function prepChanges {
+        col_echo "prepChanges for rra" 3
+        col_echo "cargo fmt" 4
+        cargo fmt
+        col_echo "clang-format" 4
+        clang-format --style=llvm -i `find rra_sim '(' -name '*.cpp' -or -name '*.h' ')'  | xargs`
+        col_echo "cargo test" 4
+        cargo test
+    }
+
     export HYPRE_DIR=~/work/macos_dependencies/install_directory/hypre
     export MFEM_DIR=~/work/macos_dependencies/install_directory/mfem
     export VTK_DIR=~/work/macos_dependencies/install_directory/vtk
