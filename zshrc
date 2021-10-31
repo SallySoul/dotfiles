@@ -50,6 +50,7 @@ export PATH=$PATH:~/.local/bin
 export PATH=$PATH:~/.yarn/bin
 export PATH=$PATH:/usr/local/cuda-11.0/bin
 export PATH=$PATH:~/work/scripts
+export PATH=$PATH:/usr/local/texlive/2021/bin/universal-darwin
 export CUDACXX=/usr/local/cuda-11.0/bin/nvcc
 export CXX=clang++
 export VTK_DIR=~/work/vtk_install/lib/cmake/vtk-8.2/
@@ -134,7 +135,13 @@ alias spotify='spotify --force-device-scale-factor=1.7'
 alias fixSound='sudo alsa force-reload'
 alias typeracer='npm - -global typeracer-cli'
 alias fullpath='echo $(pwd)/$1'
-alias rra='cargo run --release --example drumstick --color=always 2>&1 | less'
+#alias rra='cargo run --release --example drumstick --color=always 2>&1 | less'
+#alias rra2='cargo run --release --example block_squash --color=always 2>&1 | less'
+#alias rra3='cargo run --release --example pyramid --color=always 2>&1 | less'
+
+function rra {
+    cargo run --release --example $1 --color=always 2>&1 | less
+}
 
 if [ $INSIDE_EMACS ]
 then
